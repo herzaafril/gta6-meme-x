@@ -10,11 +10,27 @@
 // Outside the grader's container, MAKEFUN_BOT_DIR and MAKEFUN_OUTPUT_DIR stand in for /bot and /output:
 //   mkdir -p out && MAKEFUN_BOT_DIR=. MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BOT_DIR = process.env.MAKEFUN_BOT_DIR ?? '/bot';
 const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const POST_URL_RE = /^https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+$/;
+
+// Validate the post address before handing it to the gate: a malformed
+// POST.json (bad JSON, or a URL that is not an X status link) would be
+// refused at grading, so fail loudly here instead of copying it blindly.
+const postPath = join(BOT_DIR, 'POST.json');
+const post = JSON.parse(readFileSync(postPath, 'utf8')) as { url?: unknown };
+// X share links carry tracking parameters (?a=...&s=19); the gate wants the
+// bare status address, so judge the URL with any query string or fragment
+// stripped, and log the clean address.
+const cleanUrl = typeof post.url === 'string' ? post.url.split(/[?#]/, 1)[0] : '';
+if (!POST_URL_RE.test(cleanUrl)) {
+  console.error(`POST.json does not name an X status URL: ${JSON.stringify(post)}`);
+  process.exit(1);
+}
+console.log(`Entry post: ${cleanUrl}`);
 
 mkdirSync(OUTPUT_DIR, { recursive: true });
 try {
